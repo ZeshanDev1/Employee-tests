@@ -1,51 +1,54 @@
 FROM python:3.11-slim
 
+# Avoid prompts during package installs
+ENV DEBIAN_FRONTEND=noninteractive
+
 # Install dependencies
 RUN apt-get update && apt-get install -y \
     wget \
-    unzip \
     curl \
+    unzip \
     gnupg \
+    ca-certificates \
     fonts-liberation \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libatk1.0-0 \
-    libc6 \
-    libcairo2 \
-    libcups2 \
-    libdbus-1-3 \
-    libgdk-pixbuf2.0-0 \
-    libnspr4 \
-    libnss3 \
+    libgtk-3-0 \
     libx11-xcb1 \
+    libxcb-dri3-0 \
     libxcomposite1 \
     libxdamage1 \
     libxrandr2 \
-    xdg-utils \
+    libgbm1 \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libnss3 \
+    libxss1 \
+    libxtst6 \
+    libxshmfence1 \
+    libpangocairo-1.0-0 \
+    libxkbcommon0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Google Chrome
-RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
-    apt install -y ./google-chrome-stable_current_amd64.deb && \
-    rm google-chrome-stable_current_amd64.deb
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - && \
+    sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list' && \
+    apt-get update && \
+    apt-get install -y google-chrome-stable && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install ChromeDriver
-RUN CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+') && \
-    DRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION") && \
-    wget -O chromedriver.zip https://chromedriver.storage.googleapis.com/${DRIVER_VERSION}/chromedriver_linux64.zip && \
-    unzip chromedriver.zip && mv chromedriver /usr/bin/chromedriver && \
-    chmod +x /usr/bin/chromedriver && rm chromedriver.zip
-
-# Set display for headless mode
-ENV DISPLAY=:99
-
-# Set workdir and copy test script
-WORKDIR /app
-COPY test_employees.py .
+# Install chromedriver
+RUN CHROMEDRIVER_VERSION=$(curl -sS chromedriver.storage.googleapis.com/LATEST_RELEASE) && \
+    wget -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip && \
+    unzip /tmp/chromedriver.zip -d /usr/local/bin/ && \
+    chmod +x /usr/local/bin/chromedriver && \
+    rm /tmp/chromedriver.zip
 
 # Install Python dependencies
-RUN pip install selenium
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Run the tests
+# Copy test script
+COPY test_employees.py .
+
+# Run the test
 CMD ["python", "test_employees.py"]
 
