@@ -3,78 +3,95 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 import time
+import sys
 
-chrome_options = Options()
-chrome_options.add_argument("--headless")
-chrome_options.add_argument("--no-sandbox")
-chrome_options.add_argument("--disable-dev-shm-usage")
+# Configure headless Chrome
+options = Options()
+options.add_argument("--headless")
+options.add_argument("--no-sandbox")
+options.add_argument("--disable-dev-shm-usage")
 
-driver = webdriver.Chrome(options=chrome_options)
+# Use the chromedriver already bundled in the selenium/standalone-chrome image
+try:
+    driver = webdriver.Chrome(options=options)
+except Exception as e:
+    print("❌ Could not start Chrome WebDriver:", e)
+    sys.exit(1)
+
+base_url = "http://13.218.131.137:3000"
 
 try:
-    base_url = "http://13.218.131.137:3000"
+    # Test 1: Homepage loads
     driver.get(base_url)
     time.sleep(2)
-    print("✅ Test 1 Passed: Homepage loaded")
+    assert "Record List" in driver.title or "React App" in driver.title
+    print("✅ Test 1 Passed: Homepage loaded — title is", driver.title)
 
+    # Test 2: Navigate to Create page
     driver.find_element(By.LINK_TEXT, "Create Record").click()
-    time.sleep(2)
+    time.sleep(1)
+    assert "Create New Record" in driver.page_source
     print("✅ Test 2 Passed: Navigated to Create Record page")
 
-    driver.find_element(By.ID, "name").send_keys("Zeshan Khan")
+    # Test 3: Fill out and submit form
+    driver.find_element(By.ID, "name").send_keys("Zeeshan QA")
     driver.find_element(By.ID, "position").send_keys("QA Engineer")
     driver.find_element(By.ID, "positionSenior").click()
-    time.sleep(1)
-    print("✅ Test 3 Passed: Form fields filled")
-
     driver.find_element(By.XPATH, "//input[@type='submit' and @value='Create person']").click()
-    time.sleep(3)
-    print("✅ Test 4 Passed: Form submitted")
-
-    rows = driver.find_elements(By.XPATH, "//table/tbody/tr")
-    found = False
-    for row in rows:
-        if "Zeshan Khan" in row.text and "QA Engineer" in row.text and "Senior" in row.text:
-            found = True
-            edit_button = row.find_element(By.LINK_TEXT, "Edit")
-            delete_button = row.find_element(By.XPATH, ".//button[text()='Delete']")
-            break
-
-    assert found, "❌ Record not found after creation"
-    print("✅ Test 5 Passed: Record found on homepage")
-
-    edit_button.click()
     time.sleep(2)
-    name_field = driver.find_element(By.ID, "name")
-    name_field.clear()
-    name_field.send_keys("Zeshan Ali")
+    print("✅ Test 3 Passed: Form submitted")
+
+    # Test 4: New record appears
+    rows = driver.find_elements(By.XPATH, "//table/tbody/tr")
+    assert any("Zeeshan QA" in r.text for r in rows)
+    print("✅ Test 4 Passed: New record visible in list")
+
+    # Grab edit/delete buttons for our created row
+    row = next(r for r in rows if "Zeeshan QA" in r.text)
+    edit_btn = row.find_element(By.LINK_TEXT, "Edit")
+    delete_btn = row.find_element(By.XPATH, ".//button[text()='Delete']")
+
+    # Test 5: Edit record
+    edit_btn.click()
+    time.sleep(1)
+    name_input = driver.find_element(By.ID, "name")
+    name_input.clear()
+    name_input.send_keys("Zeeshan QA Updated")
     driver.find_element(By.XPATH, "//input[@type='submit' and @value='Update Record']").click()
-    time.sleep(3)
-    print("✅ Test 6 Passed: Record edited")
-
-    rows = driver.find_elements(By.XPATH, "//table/tbody/tr")
-    edited = any("Zeshan Ali" in row.text for row in rows)
-    assert edited, "❌ Edited record not visible"
-    print("✅ Test 7 Passed: Edited record confirmed")
-
-    for row in rows:
-        if "Zeshan Ali" in row.text:
-            delete_button = row.find_element(By.XPATH, ".//button[text()='Delete']")
-            delete_button.click()
-            break
     time.sleep(2)
-    print("✅ Test 8 Passed: Delete button clicked")
+    print("✅ Test 5 Passed: Record edited")
 
-    driver.refresh()
-    time.sleep(2)
+    # Test 6: Edited record appears
     rows = driver.find_elements(By.XPATH, "//table/tbody/tr")
-    deleted = all("Zeshan Ali" not in row.text for row in rows)
-    assert deleted, "❌ Record still exists after deletion"
-    print("✅ Test 9 Passed: Record deleted successfully")
+    assert any("Zeeshan QA Updated" in r.text for r in rows)
+    print("✅ Test 6 Passed: Edited record visible")
 
-except Exception as e:
-    print("❌ Test Failed:", e)
+    # Test 7: Delete record
+    row = next(r for r in rows if "Zeeshan QA Updated" in r.text)
+    row.find_element(By.XPATH, ".//button[text()='Delete']").click()
+    time.sleep(2)
+    print("✅ Test 7 Passed: Delete button clicked")
 
+    # Test 8: Record no longer in list
+    rows = driver.find_elements(By.XPATH, "//table/tbody/tr")
+    assert all("Zeeshan QA Updated" not in r.text for r in rows)
+    print("✅ Test 8 Passed: Record deleted from list")
+
+    # Test 9: Table structure still present
+    assert driver.find_element(By.TAG_NAME, "table")
+    print("✅ Test 9 Passed: Table still present")
+
+    # Test 10: Navbar present
+    assert driver.find_element(By.TAG_NAME, "nav")
+    print("✅ Test 10 Passed: Navbar found")
+
+    sys.exit(0)
+
+except AssertionError as ae:
+    print("❌ Assertion Failed:", ae)
+    sys.exit(2)
+except Exception as ex:
+    print("❌ Test Error:", ex)
+    sys.exit(3)
 finally:
     driver.quit()
-
